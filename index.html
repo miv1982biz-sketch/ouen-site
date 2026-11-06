@@ -228,6 +228,15 @@ footer p{margin:6px 0}
 .kit{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px}
 .kit textarea{min-height:90px; font-size:15.5px}
 .qr-note{font-size:14.5px; color:var(--ink-soft)}
+
+/* 読みもの */
+.reads{display:grid; gap:12px}
+.read-item{display:flex; align-items:center; gap:14px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; text-decoration:none; color:var(--ink)}
+.read-item:hover{border-color:var(--accent)}
+.read-item .t{font-weight:700; font-size:17.5px; line-height:1.5}
+.read-item .d{font-size:15px; color:var(--ink-soft); margin-top:2px}
+.read-item .arr{margin-left:auto; color:var(--accent); font-weight:800; font-size:20px; flex:none}
+@media (min-width:860px){.reads{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -604,6 +613,14 @@ function renderLP(){
      + '<a class="btn btn-ghost" href="#/recipient">受け手の体験をしてみる</a></section>';
 
   h += '<div class="survey-band"><h2>感想を聞かせてください</h2><p>1分で終わります。体験の前後どちらでも構いません。</p>'+surveyLink("アンケートに答える","btn-primary")+'</div>';
+
+  h += '<section class="block"><h2>読みもの</h2><p class="sub">OUENの考え方や使い方を、短い記事で紹介しています。</p>'
+     + '<div class="reads">'
+     + '<a class="read-item" href="/articles/about.html"><div><div class="t">OUENとは ― 応援ページを、ファンが先に。</div><div class="d">ファンが先にページを作る、という仕組みの考え方を紹介します。</div></div><span class="arr" aria-hidden="true">→</span></a>'
+     + '<a class="read-item" href="/articles/how-to-create.html"><div><div class="t">応援ページの作り方</div><div class="d">ページを作るときの流れと、載せられる情報の範囲をまとめました。</div></div><span class="arr" aria-hidden="true">→</span></a>'
+     + '<a class="read-item" href="/articles/for-recipients.html"><div><div class="t">お店・受け手の方へ ― ページが作られていたら</div><div class="d">自分のページが作られていたときの引き取り方・消し方について。</div></div><span class="arr" aria-hidden="true">→</span></a>'
+     + '<a class="read-item" href="/articles/safety.html"><div><div class="t">安心の仕組み ― お金を預からない理由</div><div class="d">なぜこのサービスはお金を預からないのか、その理由を説明します。</div></div><span class="arr" aria-hidden="true">→</span></a>'
+     + '</div></section>';
 
   app.innerHTML = h;
   renderCards();
