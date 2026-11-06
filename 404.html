@@ -646,6 +646,17 @@ function renderCards(){
 
 /* ================= 詳細 ================= */
 var pledgeState = { mode:"once", amount:null };
+/* メール入力モックの状態（アドレス文字列は保持しない） */
+var emailStepState = { active:false, pageId:null };
+function fireEmailAbandon(){
+  if(emailStepState.active){
+    emailStepState.active = false;
+    trackEvent("email_abandon", { pageId: emailStepState.pageId });
+  }
+}
+window.addEventListener("hashchange", fireEmailAbandon);
+window.addEventListener("pagehide", fireEmailAbandon);
+window.addEventListener("beforeunload", fireEmailAbandon);
 function renderDetail(id){
   var p = findPage(id);
   if(!p || sessionState.hidden[p.id]){ render404(); return; }
@@ -726,6 +737,20 @@ function supportPanelHtml(p){
     if(p.program === "maintenance") h += '<p class="note">維持管理（剪定・診断・治療）への定期応援を希望している人：<strong>'+(p.recurring||0)+'人</strong>（予約だけです）</p>';
   }
   h += '<div id="support-done"></div>';
+  if(!p.messagesOnly && !p.publicFigure){
+    /* メール入力モック（定期応援の予約ステップのみ・Stage B1 §40.5）
+       入力文字列はネットワーク送信せず、trackEvent にも含めない。進んだら破棄する。 */
+    h += '<div id="email-step" class="hidden" role="region" aria-label="メール入力（検証用のモック）">'
+       + '<p style="margin:0 0 14px"><strong>本人が引き取ったら、参加確認をメールで送ります</strong></p>'
+       + '<div class="field"><label for="sup-email">メールアドレス</label>'
+       + '<input type="email" id="sup-email" inputmode="email" autocomplete="email" placeholder="例：you@example.jp">'
+       + '<div id="email-alert"></div></div>'
+       + '<button class="btn btn-primary" id="email-do" style="width:100%">このメールで予約する</button>'
+       + '<button class="btn btn-ghost" id="email-skip" style="width:100%; margin-top:10px">メールなしで予約する</button>'
+       + '<p class="note" style="margin-top:14px">検証用のモックです。メールは送信されません。アドレスは保存されません</p>'
+       + '</div>';
+  }
+  h += '<div id="support-fields">';
   h += '<div class="field"><label for="sup-name">名前（ニックネームでOK）</label><input type="text" id="sup-name" placeholder="例：近所の住人"></div>';
   h += '<div class="field"><label for="sup-msg">応援メッセージ</label><textarea id="sup-msg" placeholder="応援の言葉をどうぞ"></textarea>'
      + '<p class="hint">投稿の前に自動チェックが入ります。傷つける言葉・個人情報・勧誘・選挙運動の内容は公開されません。</p></div>';
@@ -747,6 +772,7 @@ function supportPanelHtml(p){
   h += '<button class="btn btn-ghost" id="share-btn" style="width:100%">このページを共有する</button>';
   h += '<p class="note center">これまでに '+pageShares(p)+' 回共有されています（サンプル数を含む）</p>';
   h += '<div id="share-box"></div>';
+  h += '</div>'; /* /#support-fields */
   h += '</aside>';
   return h;
 }
@@ -818,6 +844,76 @@ function bindDetail(p){
     if(panel) panel.scrollIntoView({ behavior:"smooth", block:"start" });
   });
 
+  /* 応援の確定処理（単発は直接、定期予約はメールステップ経由でもここに合流する） */
+  function finalizeSupport(pending, viaEmail){
+    if(pending.msg){
+      if(!sessionState.extraMessages[p.id]) sessionState.extraMessages[p.id] = [];
+      sessionState.extraMessages[p.id].unshift({ who:pending.name, body:pending.msg });
+      var ml = document.getElementById("msglist");
+      if(ml) ml.innerHTML = msgListHtml(p);
+    }
+    if(!sessionState.supported[p.id]){
+      sessionState.supported[p.id] = true;
+      sessionState.extraSupport[p.id] = (sessionState.extraSupport[p.id]||0) + 1;
+    }
+    trackEvent("support_action", { pageId:p.id, hasMessage: !!pending.msg, amount: pending.amount, mode: pending.mode });
+    var done = document.getElementById("support-done");
+    done.innerHTML = '<div class="alert alert-ok">応援を送りました。ありがとうございます。'
+      + (pending.amount ? '<br>'+pending.amount.toLocaleString()+'円（'+(pending.mode==="once"?"単発":"月額")+'）の気持ちも記録しました。支払いは発生していません。' : '')
+      + (viaEmail ? '<br>本番では、このアドレスに確認メールが届きます' : '')
+      + '<br><span class="small">よければ感想を聞かせてください（1分）。</span><br><span class="mt" style="display:inline-block">'+surveyLink("アンケートに答える","btn-small")+'</span></div>';
+    var alertBox = document.getElementById("sup-alert");
+    if(alertBox) alertBox.innerHTML = "";
+    var msgEl = document.getElementById("sup-msg");
+    if(msgEl) msgEl.value = "";
+    var cnt = document.querySelector(".panel .big-count");
+    if(cnt) cnt.textContent = pageSupporters(p) + "人";
+    done.scrollIntoView({ behavior:"smooth", block:"center" });
+  }
+
+  /* メール入力モック：定期（月額）予約で金額が選ばれたときだけ出す */
+  function showEmailStep(pending){
+    var step = document.getElementById("email-step");
+    var fields = document.getElementById("support-fields");
+    if(!step || !fields){ finalizeSupport(pending, false); return; }
+    emailStepState.active = true;
+    emailStepState.pageId = p.id;
+    fields.classList.add("hidden");
+    step.classList.remove("hidden");
+    trackEvent("email_step_view", { pageId:p.id, mode:"monthly" });
+    step.scrollIntoView({ behavior:"smooth", block:"center" });
+    var em = document.getElementById("sup-email");
+    if(em) em.focus();
+    var doBtn = document.getElementById("email-do");
+    var skipBtn = document.getElementById("email-skip");
+    if(doBtn) doBtn.onclick = function(){
+      var input = document.getElementById("sup-email");
+      var val = input ? input.value.trim() : "";
+      var ab = document.getElementById("email-alert");
+      /* 形式チェックは端末内でのみ。文字列はこの場で破棄し、送信・保存・計測に一切含めない */
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){
+        if(ab) ab.innerHTML = '<div class="alert alert-warn">メールアドレスの形式を確認してください。</div>';
+        return;
+      }
+      if(input) input.value = "";
+      val = null;
+      emailStepState.active = false;
+      trackEvent("email_complete", { pageId:p.id, mode:"monthly" });
+      step.classList.add("hidden");
+      fields.classList.remove("hidden");
+      finalizeSupport(pending, true);
+    };
+    if(skipBtn) skipBtn.onclick = function(){
+      var input = document.getElementById("sup-email");
+      if(input) input.value = "";
+      emailStepState.active = false;
+      trackEvent("email_skip", { pageId:p.id, mode:"monthly" });
+      step.classList.add("hidden");
+      fields.classList.remove("hidden");
+      finalizeSupport(pending, false);
+    };
+  }
+
   var send = document.getElementById("sup-send");
   send.addEventListener("click", function(){
     var name = document.getElementById("sup-name").value.trim() || "名無しの応援者";
@@ -828,13 +924,6 @@ function bindDetail(p){
       alertBox.innerHTML = '<div class="alert alert-warn">公開されませんでした。理由：'+esc(bad)+'。直してもう一度送ってみてください。</div>';
       return;
     }
-    var didSomething = false;
-    if(msg){
-      if(!sessionState.extraMessages[p.id]) sessionState.extraMessages[p.id] = [];
-      sessionState.extraMessages[p.id].unshift({ who:name, body:msg });
-      document.getElementById("msglist").innerHTML = msgListHtml(p);
-      didSomething = true;
-    }
     var amount = null, mode = null;
     if(!p.messagesOnly && !p.publicFigure){
       var free = document.getElementById("sup-free");
@@ -844,20 +933,13 @@ function bindDetail(p){
       var min = mode === "once" ? 500 : 300;
       if(amount && amount < min) amount = null; /* 下限未満は金額なしの表明として扱う */
     }
-    if(!sessionState.supported[p.id]){
-      sessionState.supported[p.id] = true;
-      sessionState.extraSupport[p.id] = (sessionState.extraSupport[p.id]||0) + 1;
+    var pending = { name:name, msg:msg, amount:amount, mode:mode };
+    /* 定期応援の予約（月額＋金額あり）のみメールステップを挟む。単発は対照として現状維持 */
+    if(mode === "monthly" && amount){
+      showEmailStep(pending);
+      return;
     }
-    trackEvent("support_action", { pageId:p.id, hasMessage: !!msg, amount: amount, mode: mode });
-    var done = document.getElementById("support-done");
-    done.innerHTML = '<div class="alert alert-ok">応援を送りました。ありがとうございます。'
-      + (amount ? '<br>'+amount.toLocaleString()+'円（'+(mode==="once"?"単発":"月額")+'）の気持ちも記録しました。支払いは発生していません。' : '')
-      + '<br><span class="small">よければ感想を聞かせてください（1分）。</span><br><span class="mt" style="display:inline-block">'+surveyLink("アンケートに答える","btn-small")+'</span></div>';
-    alertBox.innerHTML = "";
-    document.getElementById("sup-msg").value = "";
-    var cnt = document.querySelector(".panel .big-count");
-    if(cnt) cnt.textContent = pageSupporters(p) + "人";
-    done.scrollIntoView({ behavior:"smooth", block:"center" });
+    finalizeSupport(pending, false);
   });
 }
 
