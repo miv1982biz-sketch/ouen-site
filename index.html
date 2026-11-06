@@ -738,16 +738,26 @@ function supportPanelHtml(p){
   }
   h += '<div id="support-done"></div>';
   if(!p.messagesOnly && !p.publicFigure){
-    /* メール入力モック（定期応援の予約ステップのみ・Stage B1 §40.5）
+    /* 連絡方法の選択モック（定期応援の予約ステップのみ・Stage B1 §40.8）
        入力文字列はネットワーク送信せず、trackEvent にも含めない。進んだら破棄する。 */
-    h += '<div id="email-step" class="hidden" role="region" aria-label="メール入力（検証用のモック）">'
-       + '<p style="margin:0 0 14px"><strong>本人が引き取ったら、参加確認をメールで送ります</strong></p>'
+    h += '<div id="email-step" class="hidden" role="region" aria-label="連絡方法の選択（検証用のモック）">'
+       + '<p style="margin:0 0 10px"><strong>本人が引き取ったら、参加確認をメールで送ります</strong></p>'
+       + '<ul style="margin:0 0 16px; padding-left:20px; font-size:15.5px">'
+       + '<li>引き取られたら、参加確認が確実に届きます</li>'
+       + '<li>自分の予約や応援を、あとから見たり取り消したりできます</li>'
+       + '<li>本人の活動報告やお礼が届きます</li>'
+       + '</ul>'
+       + '<button class="btn btn-ghost" id="id-google" style="width:100%">Googleで続ける</button>'
+       + '<button class="btn btn-ghost" id="id-line" style="width:100%; margin-top:10px">LINEで続ける</button>'
+       + '<button class="btn btn-ghost" id="id-email-open" style="width:100%; margin-top:10px">メールアドレスを入力する</button>'
+       + '<div id="email-form" class="hidden" style="margin-top:14px">'
        + '<div class="field"><label for="sup-email">メールアドレス</label>'
        + '<input type="email" id="sup-email" inputmode="email" autocomplete="email" placeholder="例：you@example.jp">'
        + '<div id="email-alert"></div></div>'
        + '<button class="btn btn-primary" id="email-do" style="width:100%">このメールで予約する</button>'
-       + '<button class="btn btn-ghost" id="email-skip" style="width:100%; margin-top:10px">メールなしで予約する</button>'
-       + '<p class="note" style="margin-top:14px">検証用のモックです。メールは送信されません。アドレスは保存されません</p>'
+       + '</div>'
+       + '<button class="btn btn-ghost" id="email-skip" style="width:100%; margin-top:10px">登録せずに予約する</button>'
+       + '<p class="note" style="margin-top:14px">検証用のモックです。メールは送信されません。アドレスは保存されません。Google／LINE の確認画面も開きません</p>'
        + '</div>';
   }
   h += '<div id="support-fields">';
@@ -844,8 +854,9 @@ function bindDetail(p){
     if(panel) panel.scrollIntoView({ behavior:"smooth", block:"start" });
   });
 
-  /* 応援の確定処理（単発は直接、定期予約はメールステップ経由でもここに合流する） */
-  function finalizeSupport(pending, viaEmail){
+  /* 応援の確定処理（単発は直接、定期予約は連絡方法の選択経由でもここに合流する）
+     contactMethod: "google" / "line" / "email" / null（登録せず） */
+  function finalizeSupport(pending, contactMethod){
     if(pending.msg){
       if(!sessionState.extraMessages[p.id]) sessionState.extraMessages[p.id] = [];
       sessionState.extraMessages[p.id].unshift({ who:pending.name, body:pending.msg });
@@ -860,7 +871,9 @@ function bindDetail(p){
     var done = document.getElementById("support-done");
     done.innerHTML = '<div class="alert alert-ok">応援を送りました。ありがとうございます。'
       + (pending.amount ? '<br>'+pending.amount.toLocaleString()+'円（'+(pending.mode==="once"?"単発":"月額")+'）の気持ちも記録しました。支払いは発生していません。' : '')
-      + (viaEmail ? '<br>本番では、このアドレスに確認メールが届きます' : '')
+      + (contactMethod === "email" ? '<br>本番では、このアドレスに確認メールが届きます' : '')
+      + (contactMethod === "google" ? '<br>本番では、ここで Google の確認画面が開きます' : '')
+      + (contactMethod === "line" ? '<br>本番では、ここで LINE の確認画面が開きます' : '')
       + '<br><span class="small">よければ感想を聞かせてください（1分）。</span><br><span class="mt" style="display:inline-block">'+surveyLink("アンケートに答える","btn-small")+'</span></div>';
     var alertBox = document.getElementById("sup-alert");
     if(alertBox) alertBox.innerHTML = "";
@@ -871,21 +884,50 @@ function bindDetail(p){
     done.scrollIntoView({ behavior:"smooth", block:"center" });
   }
 
-  /* メール入力モック：定期（月額）予約で金額が選ばれたときだけ出す */
+  /* 連絡方法の選択モック：定期（月額）予約で金額が選ばれたときだけ出す（§40.8） */
   function showEmailStep(pending){
     var step = document.getElementById("email-step");
     var fields = document.getElementById("support-fields");
-    if(!step || !fields){ finalizeSupport(pending, false); return; }
+    if(!step || !fields){ finalizeSupport(pending, null); return; }
     emailStepState.active = true;
     emailStepState.pageId = p.id;
     fields.classList.add("hidden");
     step.classList.remove("hidden");
+    var form0 = document.getElementById("email-form");
+    if(form0) form0.classList.add("hidden");
+    var open0 = document.getElementById("id-email-open");
+    if(open0) open0.classList.remove("hidden");
     trackEvent("email_step_view", { pageId:p.id, mode:"monthly" });
     step.scrollIntoView({ behavior:"smooth", block:"center" });
-    var em = document.getElementById("sup-email");
-    if(em) em.focus();
+    function closeStep(){
+      emailStepState.active = false;
+      var input = document.getElementById("sup-email");
+      if(input) input.value = "";
+      step.classList.add("hidden");
+      fields.classList.remove("hidden");
+    }
+    var gBtn = document.getElementById("id-google");
+    if(gBtn) gBtn.onclick = function(){
+      trackEvent("identity_choice", { method:"google", pageId:p.id });
+      closeStep();
+      finalizeSupport(pending, "google");
+    };
+    var lBtn = document.getElementById("id-line");
+    if(lBtn) lBtn.onclick = function(){
+      trackEvent("identity_choice", { method:"line", pageId:p.id });
+      closeStep();
+      finalizeSupport(pending, "line");
+    };
+    var openBtn = document.getElementById("id-email-open");
+    if(openBtn) openBtn.onclick = function(){
+      trackEvent("identity_choice", { method:"email", pageId:p.id });
+      var form = document.getElementById("email-form");
+      if(form) form.classList.remove("hidden");
+      openBtn.classList.add("hidden");
+      var em = document.getElementById("sup-email");
+      if(em) em.focus();
+    };
     var doBtn = document.getElementById("email-do");
-    var skipBtn = document.getElementById("email-skip");
     if(doBtn) doBtn.onclick = function(){
       var input = document.getElementById("sup-email");
       var val = input ? input.value.trim() : "";
@@ -897,20 +939,16 @@ function bindDetail(p){
       }
       if(input) input.value = "";
       val = null;
-      emailStepState.active = false;
       trackEvent("email_complete", { pageId:p.id, mode:"monthly" });
-      step.classList.add("hidden");
-      fields.classList.remove("hidden");
-      finalizeSupport(pending, true);
+      closeStep();
+      finalizeSupport(pending, "email");
     };
+    var skipBtn = document.getElementById("email-skip");
     if(skipBtn) skipBtn.onclick = function(){
-      var input = document.getElementById("sup-email");
-      if(input) input.value = "";
-      emailStepState.active = false;
+      trackEvent("identity_choice", { method:"none", pageId:p.id });
       trackEvent("email_skip", { pageId:p.id, mode:"monthly" });
-      step.classList.add("hidden");
-      fields.classList.remove("hidden");
-      finalizeSupport(pending, false);
+      closeStep();
+      finalizeSupport(pending, null);
     };
   }
 
@@ -939,7 +977,7 @@ function bindDetail(p){
       showEmailStep(pending);
       return;
     }
-    finalizeSupport(pending, false);
+    finalizeSupport(pending, null);
   });
 }
 
