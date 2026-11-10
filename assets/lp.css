@@ -42,7 +42,8 @@ padding:10px 16px; border-bottom:1px solid var(--line);
 /* ヘッダー */
 .site-head{border-bottom:1px solid var(--line); background:var(--bg); position:sticky; top:0; z-index:40}
 .site-head .wrap{display:flex; align-items:center; gap:16px; padding-top:12px; padding-bottom:12px}
-.brand{font-family:"M PLUS Rounded 1c",sans-serif; font-weight:800; font-size:19px; color:var(--ink); text-decoration:none; letter-spacing:.02em; white-space:nowrap}
+.brand{font-family:"M PLUS Rounded 1c",sans-serif; font-weight:800; font-size:19px; color:var(--ink); text-decoration:none; letter-spacing:.02em; white-space:nowrap; display:inline-flex; align-items:center; gap:8px}
+.brand img{width:26px; height:26px}
 .brand .dot{color:var(--accent)}
 .head-nav{margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 .head-nav a{color:var(--ink); text-decoration:none; font-size:15.5px; padding:8px 10px; border-radius:999px}
@@ -77,7 +78,7 @@ font-weight:700; font-size:16.5px; text-decoration:none; line-height:1.4; text-a
 /* 3ステップ */
 .steps{display:grid; gap:14px; margin:28px 0}
 .step{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px}
-.step .no{display:inline-block; background:var(--soft2); color:var(--accent-strong); font-weight:800; border-radius:999px; padding:2px 12px; font-size:14px; margin-bottom:8px}
+.step .no{display:inline-block; background:var(--soft2); color:var(--accent-strong); font-weight:800; border-radius:999px; padding:2px 12px; font-size:14.5px; margin-bottom:8px}
 .step h3{margin:0 0 6px; font-size:19px}
 .step p{margin:0; color:var(--ink-soft); font-size:16px}
 @media (min-width:860px){.steps{grid-template-columns:repeat(3,1fr)}}
@@ -115,7 +116,7 @@ section.block .sub{color:var(--ink-soft); margin:0 0 18px}
 .card.featured h3{font-size:23px}
 }
 .tagrow{display:flex; gap:6px; flex-wrap:wrap}
-.tag{display:inline-block; font-size:13.5px; font-weight:700; border-radius:999px; padding:3px 11px; background:var(--soft); color:var(--ink-soft); line-height:1.5}
+.tag{display:inline-block; font-size:14.5px; font-weight:700; border-radius:999px; padding:3px 11px; background:var(--soft); color:var(--ink-soft); line-height:1.5}
 .tag.badge-fan{background:var(--soft2); color:var(--accent-strong)}
 .tag.badge-ok{background:#E7F3EC; color:var(--ok)}
 @media (prefers-color-scheme: dark){.tag.badge-ok{background:#1E3325}}
@@ -217,3 +218,5 @@ footer p{margin:6px 0}
 .read-item .d{font-size:15px; color:var(--ink-soft); margin-top:2px}
 .read-item .arr{margin-left:auto; color:var(--accent); font-weight:800; font-size:20px; flex:none}
 @media (min-width:860px){.reads{grid-template-columns:repeat(2,1fr)}}
+
+@media (max-width:640px){.site-head .wrap{flex-wrap:wrap}.head-nav{order:2; width:100%; margin-left:0}}
